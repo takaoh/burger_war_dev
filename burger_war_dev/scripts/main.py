@@ -3,6 +3,8 @@
 import rospy
 import random
 
+from geometry_msgs.msg import Twist
+
 import tf
 
 
@@ -10,8 +12,9 @@ import actionlib
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
 import actionlib_msgs
 
-# test yamada
-from geometry_msgs.msg import Twist
+#for Get Score
+import json
+from std_msgs.msg import String
 
 # Ref: https://hotblackrobotics.github.io/en/blog/2018/01/29/action-client-py/
 
@@ -28,9 +31,47 @@ class NaviBot():
         self.vel_pub = rospy.Publisher('cmd_vel', Twist,queue_size=1)
         self.client = actionlib.SimpleActionClient('move_base',MoveBaseAction)
 
+ # score subscriver
+        self.myColor     = None
+        self.myScore     = 0
+        self.enemyScore  = None
+        self.warState    = None
+        self.wartime     = 0
+        self.score_sub   = rospy.Subscriber('/war_state', String, self.warStateCallback, queue_size=1)
 
+        # StrategyState 
+        self.StrategyState       = "Init"
 
+    #以下を参考にさせていただきました
+    #https://raw.githubusercontent.com/rhc-ipponmanzoku/burger_war/master/burger_war/scripts/testRun.py
+    def warStateCallback(self,data):
+        warState = data
+        jsonWarState = json.loads(warState.data)
+        self.warState = jsonWarState["scores"]
 
+         # which team?
+        if jsonWarState["players"]["r"] == "you":
+            self.myColor = "r"
+            self.enemyScore = "b"
+        else:
+            self.myColor = "b"
+            self.enemyScore = "r"
+
+        #update myScore
+        self.myScore = jsonWarState["scores"][self.myColor]
+
+        #update enemyScore
+        self.enemyScore = jsonWarState["scores"][self.myColor]
+
+        #update war time
+        self.wartime = jsonWarState["time"]
+        
+        print('=================================')
+        print('myScore: {0}'.format(self.myScore))
+        print('enemyScore: {0}'.format(self.enemyScore))
+        print('wartime: {0}'.format(self.wartime))
+        print('=================================')
+       
     def setGoal(self,x,y,yaw):
         self.client.wait_for_server()
 
@@ -54,47 +95,48 @@ class NaviBot():
             rospy.signal_shutdown("Action server not available!")
         else:
             return self.client.get_result()        
+       
+    def navi_rotate(self):
 
-        # Under construction
-    def back(self):
-        x = -0.1
-        th = 0
-        twist = Twist()
-        twist.linear.x = x; twist.linear.y = 0; twist.linear.z = 0
-        twist.angular.x = 0; twist.angular.y = 0; twist.angular.z = th
-        return twist
-    ###################################
+        self.setGoal(-0.5,0,0)
+       
+
+    def navi_defence(self):
+        self.setGoal(-0.9,0,0)
+
+    def check_state(self):
+        if self.wartime  < 10:
+            self.StrategyState = "Rotate"
+        elif self.myScore >= self.enemyScore:
+            self.StrategyState = "Defence"
+        elif self.myScore < self.enemyScore:
+            self.StrategyState = "Rotate"
+        else:
+            print "Error"
+        #print('=================================')
+        #print self.StrategyState
+        #print('=================================')    
+
     
     def strategy(self):
+    
         r = rospy.Rate(5) # change speed 5fps
-#           (ue is plus , hidari is plus, rotation plus is couterclock)
+        
 
-     #   twist = self.back()
-     #   print(twist)
-     #   self.vel_pub.publish(twist)
-     #   r.sleep()
+        while not rospy.is_shutdown():
+           
+            self.check_state()
 
-        # get points first
-        self.setGoal(-0.9,  0,      0)
-        self.setGoal(-1.3,  0,      0)
-        self.setGoal(-1.3,  0,      3.1415/4)
-        self.setGoal(-1.3,  0,      -3.1415/4)
-
-        # start circling around field
-        self.setGoal(-0.742,-0.742, 3.1415*7/4)
-        self.setGoal(0,     -1.3,   3.1415*1/4)
-        self.setGoal(0.742, -0.742, 3.1415*1/4)
-        self.setGoal(1.3,   0,      3.1415*3/4)
-
-        self.setGoal(0.9,   0,      3.1415)
-        self.setGoal(1.3,   0,      3.1415)
-        self.setGoal(1.3,   0,      3.1415*3/4)
-        self.setGoal(1.3,   0,      3.1415*5/4)
-
-        self.setGoal(0.742, 0.742,  3.1415*3/4)
-        self.setGoal(0,     1.3,    3.1415*5/4)      
-        self.setGoal(-0.742,0.742,  3.1415*5/4)
-        self.setGoal(-1.3,  0,      3.1415*7/4)
+            if self.StrategyState == "Rotate":
+                twist = self.navi_rotate()
+            elif self.StrategyState == "Defence":
+                twist = self.navi_defence()
+            else:
+                print "Error"
+            print('=================================')
+            print self.StrategyState
+            print('=================================')    
+            r.sleep()   
 
 
 
