@@ -27,9 +27,11 @@ import actionlib
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
 import actionlib_msgs
 import time
+import json
+from std_msgs.msg import String
 
 #LiDARの閾値
-DETECT_POINT_NUM = 10
+DETECT_POINT_NUM = 7
 
 #SEARCHの初期化時間
 SEARCH_INIT_TIME = 3
@@ -37,10 +39,13 @@ class MainState():
     """
     1. NAVIにてフィールドマーカを取得
     2. 取得後，SEARCHを行い敵を捜索
-    2-1. 敵を見つけた場合はATTACK（相手のいる方向へ走る）
-        2-1-1. 指定した角度に回転し，距離を走った(MOVE)後，スコアが勝っている場合はDEFFENCE(未実装)
-        2-1-2. 指定した角度に回転し，距離を走った(MOVE)後，スコアが負けている場合は2に戻る
-    2-2. 敵を見つけてない場合は1に戻る
+        2-1. 敵を見つけた場合
+            ->相手がいる方向に回転（ATTACK）し，距離を走った(MOVE)後，手順2に遷移
+        2-2. 敵を見つけてない場合（一度でもATTACKになったことがない）
+            2-2-1. 手順1に遷移 　
+        2-3. 敵を見つけてない場合（一度でもATTACKになったことがある）
+            2-3-1. 得点が負けている場合は手順1に遷移
+            2-3-1. 得点が勝っている場合は手順2に遷移
     """
     INIT        = 0    # 初期状態
     NAVI        = 1    # Navigationによる移動
@@ -85,6 +90,14 @@ class AllSensorBot(object):
         # Navigation
         self.navi_target      = NaviTarget.INIT   # 目指すターゲット
         self.client = actionlib.SimpleActionClient('move_base',MoveBaseAction)
+
+        #Score
+        self.myColor     = None
+        self.myScore     = 0
+        self.enemyScore  = None
+        self.warState    = None
+        self.wartime     = 0
+        self.score_sub   = rospy.Subscriber('/war_state', String, self.warStateCallback, queue_size=1)
 
         # lidar scan subscriber
         if use_lidar:
@@ -163,6 +176,39 @@ class AllSensorBot(object):
         else:
             print("[Flase]Detect_EMEMY:%d " % count)
             return False
+    
+    ####################################
+     #得点管理
+    ####################################
+    #以下を参考にさせていただきました
+    #https://raw.githubusercontent.com/rhc-ipponmanzoku/burger_war/master/burger_war/scripts/testRun.py
+    def warStateCallback(self,data):
+        warState = data
+        jsonWarState = json.loads(warState.data)
+        self.warState = jsonWarState["scores"]
+
+         # which team?
+        if jsonWarState["players"]["r"] == "you":
+            self.myColor = "r"
+            self.enemyScore = "b"
+        else:
+            self.myColor = "b"
+            self.enemyScore = "r"
+
+        #update myScore
+        self.myScore = jsonWarState["scores"][self.myColor]
+
+        #update enemyScore
+        self.enemyScore = jsonWarState["scores"][self.enemyScore]
+
+        #update war time
+        self.wartime = jsonWarState["time"]
+        
+        print('=================================')
+        print('myScore: {0}'.format(self.myScore))
+        print('enemyScore: {0}'.format(self.enemyScore))
+        print('wartime: {0}'.format(self.wartime))
+        print('=================================')
 
     ####################################
      #状態処理関数
@@ -234,7 +280,7 @@ class AllSensorBot(object):
         2.  閾値以上の距離が移動している点が３つ以上ある場合
                 -> ATTACKモードに移行
             閾値以上の距離が移動している点が３つ以上ない場合
-                -> NAVIモードに移行
+                -> NAVIモードに移行 or SEARCHモードに移行
         """
         
         time_count = 0
@@ -257,7 +303,10 @@ class AllSensorBot(object):
         if self.prev_main_state == MainState.NAVI:
             self.next_state = MainState.NAVI
         elif self.prev_main_state == MainState.MOVE:
-            self.next_state = MainState.SEARCH
+            if self.myScore > self.enemyScore:
+                self.next_state = MainState.SEARCH
+            else:
+                self.next_state = MainState.NAVI
 
     def func_state_attack(self):
         
@@ -319,7 +368,7 @@ class AllSensorBot(object):
         print "MOVING!!!!!!!!!"
         print "**************"
         twist = Twist()
-        twist.linear.x = 10; twist.linear.y = 0; twist.linear.z = 0
+        twist.linear.x = 20; twist.linear.y = 0; twist.linear.z = 0
         twist.angular.x = 0; twist.angular.y = 0; twist.angular.z = 0
         # publish twist topic
         self.vel_pub.publish(twist)
@@ -407,7 +456,7 @@ class AllSensorBot(object):
             radar.itemset((origin_y,n,2),255)
             radar.itemset((n,origin_x,2),255)
         
-         
+        """
         for i in range(len(npMaskedRanges)):
             if npMaskedRanges[i] != 0:
                 if i <= 90:
@@ -432,7 +481,7 @@ class AllSensorBot(object):
                     print "i:%d ang:%f x:%d y:%d range:%f" %(i, np.rad2deg(ang),x,y,npMaskedRanges[i])
                 #print "ang:%f x:%d y:%d" %(np.rad2deg(ang),x,y)
                 radar.itemset((y,x,1),255)
-        
+        """
         #cv2.imshow('Radar',radar)
         cv2.waitKey(1)
         self.scanned.ranges = self.scan.ranges[:]
