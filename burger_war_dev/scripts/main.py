@@ -35,19 +35,20 @@ DETECT_POINT_NUM = 10
 SEARCH_INIT_TIME = 3
 class MainState():
     """
-    1. MOVINGにてフィールドマーカを取得
+    1. NAVIにてフィールドマーカを取得
     2. 取得後，SEARCHを行い敵を捜索
     2-1. 敵を見つけた場合はATTACK（相手のいる方向へ走る）
-        2-1-1. 指定した角度に回転し，距離を走った後，スコアが勝っている場合はDEFFENCE
-        2-1-2. 指定した角度に回転し，距離を走った後，スコアが負けている場合は2に戻る
+        2-1-1. 指定した角度に回転し，距離を走った(MOVE)後，スコアが勝っている場合はDEFFENCE(未実装)
+        2-1-2. 指定した角度に回転し，距離を走った(MOVE)後，スコアが負けている場合は2に戻る
     2-2. 敵を見つけてない場合は1に戻る
     """
     INIT        = 0    # 初期状態
-    MOVING      = 1    # Navigationによる移動
+    NAVI        = 1    # Navigationによる移動
     SEARCH      = 2    # 停止してLiDARによる検索
-    ATTACK      = 3    # 追撃
+    ATTACK      = 3    # 相手方向に回転
     DEFFENCE    = 4    # Opencvによるディフェンス
     STOP        = 5    # 停止（degug）
+    MOVE        = 6    # 相手方向に直進
     
 
 class NaviTarget():
@@ -81,7 +82,6 @@ class AllSensorBot(object):
         self.prev_main_state = MainState.INIT   # 前回メイン状態
         self.next_state      = MainState.INIT   # 次状態
 
-    
         # Navigation
         self.navi_target      = NaviTarget.INIT   # 目指すターゲット
         self.client = actionlib.SimpleActionClient('move_base',MoveBaseAction)
@@ -168,10 +168,10 @@ class AllSensorBot(object):
      #状態処理関数
     ####################################
     def func_state_init(self):
-        self.next_state = MainState.MOVING
+        self.next_state = MainState.NAVI
         return
 
-    def func_state_moving(self):
+    def func_state_navigation(self):
         """
         1.  順番にマーカを取得しに行く
         """
@@ -234,7 +234,7 @@ class AllSensorBot(object):
         2.  閾値以上の距離が移動している点が３つ以上ある場合
                 -> ATTACKモードに移行
             閾値以上の距離が移動している点が３つ以上ない場合
-                -> MOVINGモードに移行
+                -> NAVIモードに移行
         """
         
         time_count = 0
@@ -252,10 +252,12 @@ class AllSensorBot(object):
 
         if self.is_detect_ememy_by_LiDAR():
             self.next_state = MainState.ATTACK
-
             return
-        else:
-            self.next_state = MainState.MOVING
+
+        if self.prev_main_state == MainState.NAVI:
+            self.next_state = MainState.NAVI
+        elif self.prev_main_state == MainState.MOVE:
+            self.next_state = MainState.SEARCH
 
     def func_state_attack(self):
         
@@ -291,11 +293,7 @@ class AllSensorBot(object):
     
         # publish twist topic
         self.vel_pub.publish(twist)
-
         self.next_state = MainState.STOP
-
-
-
         return
 
     def func_state_defence(self):
@@ -310,8 +308,23 @@ class AllSensorBot(object):
         twist.angular.x = 0; twist.angular.y = 0; twist.angular.z = 0
         # publish twist topic
         self.vel_pub.publish(twist)
+        if self.prev_main_state == MainState.ATTACK:
+            self.next_state = MainState.MOVE
+        else:
+            self.next_state = MainState.SEARCH
+        return
+    
+    def func_state_moving(self):
+        print "**************"
+        print "MOVING!!!!!!!!!"
+        print "**************"
+        twist = Twist()
+        twist.linear.x = 10; twist.linear.y = 0; twist.linear.z = 0
+        twist.angular.x = 0; twist.angular.y = 0; twist.angular.z = 0
+        # publish twist topic
+        self.vel_pub.publish(twist)
 
-        self.next_state = MainState.SEARCH
+        self.next_state = MainState.STOP
         return
 
     def strategy(self):
@@ -323,14 +336,14 @@ class AllSensorBot(object):
             if self.main_state == MainState.INIT:
                 # 初期化時
                 self.func_state_init()
-            elif self.main_state == MainState.MOVING:
+            elif self.main_state == MainState.NAVI:
                 # 移動
-                self.func_state_moving()
+                self.func_state_navigation()
             elif self.main_state == MainState.SEARCH:
                 # 敵捜索
                 self.func_state_search()
             elif self.main_state == MainState.ATTACK:
-                # 敵追跡
+                # 敵に向けて回転
                 self.func_state_attack()
             elif self.main_state == MainState.DEFFENCE:
                 # 守り
@@ -338,6 +351,9 @@ class AllSensorBot(object):
             elif self.main_state == MainState.STOP:
                 # 停止
                 self.func_state_stop()
+            elif self.main_state == MainState.MOVE:
+                # 敵に向けて全身
+                self.func_state_moving()
             else:
                 pass
 
@@ -346,6 +362,7 @@ class AllSensorBot(object):
             print('next_state = ',self.next_state)
 
             # メイン状態を次の状態に更新
+            self.prev_main_state = self.main_state 
             self.main_state = self.next_state
             # 1秒Wait
             r.sleep()
@@ -416,7 +433,7 @@ class AllSensorBot(object):
                 #print "ang:%f x:%d y:%d" %(np.rad2deg(ang),x,y)
                 radar.itemset((y,x,1),255)
         
-        cv2.imshow('Radar',radar)
+        #cv2.imshow('Radar',radar)
         cv2.waitKey(1)
         self.scanned.ranges = self.scan.ranges[:]
         return
