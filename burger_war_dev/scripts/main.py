@@ -29,10 +29,10 @@ import actionlib_msgs
 import time
 
 #LiDARの閾値
-DETECT_POINT_MIN = 10
+DETECT_POINT_NUM = 10
 
 #SEARCHの初期化時間
-SEARCH_INIT_TIME = 2
+SEARCH_INIT_TIME = 3
 class MainState():
     """
     1. MOVINGにてフィールドマーカを取得
@@ -157,7 +157,7 @@ class AllSensorBot(object):
         戻り値  True：検知/False：未検知
         """
         count = sum(self.npSubRanges)
-        if count > DETECT_POINT_MIN:
+        if count > DETECT_POINT_NUM:
             print("[Ture]Detect_EMEMY:%d " % count)
             return True
         else:
@@ -263,13 +263,16 @@ class AllSensorBot(object):
         npMaskedRanges = self.npScanRanges*self.npSubRanges
         total_angle = 0
         count = 0
-
+    
         for i in range(len(npMaskedRanges)):
-            if npMaskedRanges[i] != 0:
+            if npMaskedRanges[i] != 0:    
                 total_angle = total_angle + i
-                
+                count = count + 1
+            if count >= DETECT_POINT_NUM:
+                break
+
         #出現数をカウント
-        count = sum(self.npSubRanges)
+        #count = sum(self.npSubRanges)
         #敵がいる角度の計算
         angle_deg =  total_angle / count
         print("Ememy Position Angle(deg):%f " % angle_deg)
@@ -345,7 +348,7 @@ class AllSensorBot(object):
             # メイン状態を次の状態に更新
             self.main_state = self.next_state
             # 1秒Wait
-            rospy.sleep(1)
+            r.sleep()
 
     def Radar(self):
         """
