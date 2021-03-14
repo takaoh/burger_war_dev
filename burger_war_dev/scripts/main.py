@@ -332,7 +332,7 @@ class AllSensorBot(object):
             elif self.main_state == MainState.DEFFENCE:
                 # 守り
                 self.func_state_defence()
-            elif self.main_state == MainState.DEFFENCE:
+            elif self.main_state == MainState.STOP:
                 # 停止
                 self.func_state_stop()
             else:
