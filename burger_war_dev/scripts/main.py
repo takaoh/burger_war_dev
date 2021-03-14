@@ -284,7 +284,7 @@ class AllSensorBot(object):
         #旋回開始
         twist = Twist()
         twist.linear.x = 0; twist.linear.y = 0; twist.linear.z = 0
-        twist.angular.x = 0; twist.angular.y = 0; twist.angular.z = 1
+        twist.angular.x = 0; twist.angular.y = 0; twist.angular.z = angle_rad
     
         # publish twist topic
         self.vel_pub.publish(twist)
