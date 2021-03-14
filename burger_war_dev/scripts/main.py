@@ -302,7 +302,7 @@ class AllSensorBot(object):
 
         if self.prev_main_state == MainState.NAVI:
             self.next_state = MainState.NAVI
-        elif self.prev_main_state == MainState.MOVE:
+        else:
             if self.myScore > self.enemyScore:
                 self.next_state = MainState.SEARCH
             else:
