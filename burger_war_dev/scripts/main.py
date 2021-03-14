@@ -288,9 +288,7 @@ class AllSensorBot(object):
     
         # publish twist topic
         self.vel_pub.publish(twist)
-        """
-        self.next_state = MainState.STOP
-        """
+
         self.next_state = MainState.STOP
 
 
@@ -298,6 +296,19 @@ class AllSensorBot(object):
         return
 
     def func_state_defence(self):
+        return
+
+    def func_state_stop(self):
+        print "**************"
+        print "STOP!!!!!!!!!"
+        print "**************"
+        twist = Twist()
+        twist.linear.x = 0; twist.linear.y = 0; twist.linear.z = 0
+        twist.angular.x = 0; twist.angular.y = 0; twist.angular.z = 0
+        # publish twist topic
+        self.vel_pub.publish(twist)
+
+        self.next_state = MainState.SEARCH
         return
 
     def strategy(self):
@@ -321,6 +332,9 @@ class AllSensorBot(object):
             elif self.main_state == MainState.DEFFENCE:
                 # 守り
                 self.func_state_defence()
+            elif self.main_state == MainState.DEFFENCE:
+                # 停止
+                self.func_state_stop()
             else:
                 pass
 
@@ -332,26 +346,6 @@ class AllSensorBot(object):
             self.main_state = self.next_state
             # 1秒Wait
             rospy.sleep(1)
-    
-        
-    
-
-        """ 
-        r = rospy.Rate(1)
-        while not rospy.is_shutdown():
-            # update twist
-            if self.is_detect_ememy_by_LiDAR():
-
-            
-            twist = Twist()
-            twist.linear.x = 0; twist.linear.y = 0; twist.linear.z = 0
-            twist.angular.x = 0; twist.angular.y = 0; twist.angular.z = 0
-            if len(self.scan.ranges) != 0:
-                bot.Radar()
-            # publish twist topic
-            self.vel_pub.publish(twist)
-            r.sleep()
-        """
 
     def Radar(self):
         """
