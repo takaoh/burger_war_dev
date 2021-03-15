@@ -94,6 +94,7 @@ class AllSensorBot(object):
         #Score
         self.myColor     = None
         self.myScore     = 0
+        self.enemyColor  = None
         self.enemyScore  = None
         self.warState    = None
         self.wartime     = 0
@@ -190,16 +191,16 @@ class AllSensorBot(object):
          # which team?
         if jsonWarState["players"]["r"] == "you":
             self.myColor = "r"
-            self.enemyScore = "b"
+            self.enemyColor = "b"
         else:
             self.myColor = "b"
-            self.enemyScore = "r"
+            self.enemyColor = "r"
 
         #update myScore
         self.myScore = jsonWarState["scores"][self.myColor]
 
         #update enemyScore
-        self.enemyScore = jsonWarState["scores"][self.enemyScore]
+        self.enemyScore = jsonWarState["scores"][self.enemyColor]
 
         #update war time
         self.wartime = jsonWarState["time"]
